@@ -20,8 +20,8 @@ const initializeDbAndServer = async () => {
       driver: sqlite3.Database,
     });
 
-    app.listen(3000, () =>
-      console.log("Server Running at http://localhost:3000/")
+    app.listen(3001, () =>
+      console.log("Server Running at http://localhost:3001/")
     );
   } catch (error) {
     console.log(`DB Error: ${error.message}`);
@@ -39,7 +39,6 @@ const convertUsersDbObjectToResponseObject = (dbObject) => {
     dateTime: dbObject.date_time,
   };
 };
-
 
 app.post("/register/", async (request, response) => {
   const { username, password, name, gender } = request.body;
@@ -93,6 +92,7 @@ function authenticateToken(request, response, next) {
           response.status(401);
           response.send("Invalid JWT Token");
         } else {
+          request.username = payload.username;
           next();
         }
       }
@@ -162,14 +162,18 @@ const userFollowerDbToResponse = (dbFollow) => {
 };
 
 app.get("/user/following/", authenticateToken, async (request, response) => {
-  const getUsersTweetQuery = `
-    SELECT
-      username
-    FROM
-      user JOIN Follower
-      ON user.user_id = Follower.following_user_id;`;
+  const { username } = request;
+  const getUserQuery = `SELECT * FROM user WHERE username = '${username}';`;
+  const userId = await database.get(getUserQuery);
+  const { id } = userId;
+ 
+  const tweetsQuery = `
+   SELECT 
+    name
+   FROM follower INNER JOIN user on user.user_id = follower.following_user_id
+    WHERE follower.follower_user_id = ${id};`;
 
-  const usersArray = await database.all(getUsersTweetQuery);
+  const usersArray = await database.all(tweetsQuery);
 
   response.send(
     usersArray.map((eachFollowing) => userFollowerDbToResponse(eachFollowing))
@@ -195,14 +199,14 @@ app.get("/user/followers/", authenticateToken, async (request, response) => {
 
 // API 6
 
-const convertDbToResponseTweet = (tweetObj) => {
+const convertDbToResponseTweet = (tweetDetails) => {
   return {
-    tweet: tweetObj.tweet,
-    likes: tweetObj.likes,
-    replies: tweetObj.replies,
-    dateTime: tweetObj.date_time,
+    tweet: tweetDetails.tweet,
+    likes: tweetDetails.likes,
+    replies: tweetDetails.replies,
+    dateTime: tweetDetails.date_time,
   };
-};
+}; 
 
 app.get("/tweets/:tweetId/", authenticateToken, async (request, response) => {
   const { tweetId } = request.params;
